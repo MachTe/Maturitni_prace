@@ -51,7 +51,7 @@ def get_frequency_impulse(frequency, sample_num, amplitude=0.75, sample_rate=441
     return data
 
 
-def get_encoding(data, backup_bytes, encoding='IBM852'):
+def get_encoding(data, backup_bytes, enc='IBM852'):
     '''Uses Reed-Solomon error-correction code to transform a String into ones and zeros which are to be send.
 
     # data: String of ASCII characters
@@ -66,13 +66,13 @@ def get_encoding(data, backup_bytes, encoding='IBM852'):
         a = rsc.encode(bytearray([int(st[:8], 2), int(st[8:], 2)]))
     else:
         # unknown characters are replaced with a '?'
-        a = rsc.encode(bytes(data, encoding, 'replace'))
+        a = rsc.encode(bytes(data, enc, 'replace'))
 
     bytes_as_bits = ''.join(format(byte, '08b') for byte in a)
     return bytes_as_bits
 
 
-def Transmit(frequency, chunk_size, convolution_magnitude=2, amplitude=0.75, sample_rate=44100, cushion=30):
+def Transmit(frequency, chunk_size, convolution_magnitude=2, amplitude=0.75, sample_rate=44100, cushion=30, enc='IBM852'):
     '''THE MAIN FUNCTION used to transmit messages via sound
 
     # frequency: integer: between 1 and sample_rate/2, frequency on which the data is transmitted
@@ -90,11 +90,11 @@ def Transmit(frequency, chunk_size, convolution_magnitude=2, amplitude=0.75, sam
         binary_data = "111111111111111111111111111111111111111111111111111111111111111111111111100000000000000000000000"
         message = input("Enter your message: ")
 
-        binary_data += get_encoding("Đ", 1)
+        binary_data += get_encoding("Đ", 1, enc=enc)
         # initial sequence used to recognize the beginning of a transmission.
-        binary_data += get_encoding(len(message) + 2*cushion + 2*cushion*(len(message) // (255 - 2*cushion)), 1)
+        binary_data += get_encoding(len(message) + 2*cushion + 2*cushion*(len(message) // (255 - 2*cushion)), 1, enc=enc)
         # length of the message itself and its cushion.
-        binary_data += get_encoding(message, cushion)
+        binary_data += get_encoding(message, cushion, enc=enc)
         # the message itself and its cushion.
 
         impulse = get_frequency_impulse(frequency, chunk_size, convolution_magnitude=convolution_magnitude, amplitude=amplitude, sample_rate=sample_rate)
@@ -115,4 +115,4 @@ def Transmit(frequency, chunk_size, convolution_magnitude=2, amplitude=0.75, sam
         p.play()
 
 
-Transmit(20700, 49, convolution_magnitude=2, amplitude=0.75, sample_rate=44100, cushion=30)
+Transmit(20700, 49, convolution_magnitude=2, amplitude=0.75, sample_rate=44100, cushion=30, enc='IBM852')
