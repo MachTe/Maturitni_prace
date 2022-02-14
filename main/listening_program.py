@@ -51,13 +51,11 @@ def find_frequency(indata, target_frequency, d_sample):
     return abs(Sigma)
 
 
-def get_encoding(data, backup_bytes):
+def get_encoding(data, backup_bytes, enc='IBM852'):
     '''Uses Reed-Solomon error-correction code to transform a String into ones and zeros which are to be send.
-
     # data: String of IBM852 characters
     # backup_bytes: Number of bytes protected against flipping
-    # bytes_as_bits: String of ones and zeros
-    '''
+    # bytes_as_bits: String of ones and zeros'''
 
     rsc = RSCodec(2 * backup_bytes)
 
@@ -66,18 +64,18 @@ def get_encoding(data, backup_bytes):
         a = rsc.encode(bytearray([int(st[:8], 2), int(st[8:], 2)]))
         # not wasting space for binary numbers
     else:
-        a = rsc.encode(bytes(data, 'IBM852', 'replace'))
+        a = rsc.encode(bytes(data, enc, 'replace'))
         # unknown characters are replaced with a '?'
 
     bytes_as_bits = ''.join(format(byte, '08b') for byte in a)
     return bytes_as_bits
 
 
-def get_decoding(data, backup_bytes):
+def get_decoding(data, backup_bytes, enc='IBM852'):
     '''Decodes the String of ones and zeros produced by the get_encoding() back into the initial message.'''
 
     rsc = RSCodec(2 * backup_bytes)
-    message = rsc.decode(bytearray([(int(data[i:i + 8], 2)) for i in range(0, len(data), 8)]))[0].decode(encoding="IBM852")
+    message = rsc.decode(bytearray([(int(data[i:i + 8], 2)) for i in range(0, len(data), 8)]))[0].decode(encoding=enc)
     # Cuts data into segments of 8 bits and translates them back into characters
 
     return message
@@ -108,7 +106,7 @@ def skip(num):
         return 0
 
 
-def signal_processing(target_frequency, cushion=30, sensitivity=0.5, chunk_size=49, d_sample=44100, buffer_length=44100):
+def signal_processing(target_frequency, cushion=30, sensitivity=0.5, chunk_size=49, d_sample=44100, buffer_length=44100, enc='IMB852'):
     '''THE MAIN THREAD, where the signal gets processed.
 
     # target_frequency, integer between 1 and d_sample/2, frequency on which the data is transmitted.
@@ -198,7 +196,7 @@ def signal_processing(target_frequency, cushion=30, sensitivity=0.5, chunk_size=
                         # Looks for the initial binary sequence, which is the Đ character + two correction bytes.
                         if len(wanted_bits) > 23:
                             try:
-                                if bytes(get_decoding(wanted_bits[-24:], 1), 'IBM852') == bytes("Đ", 'IBM852'):
+                                if bytes(get_decoding(wanted_bits[-24:], 1, enc=enc), enc) == bytes("Đ", enc):
                                     initial_sequence = True
                                     wanted_bits = ""
                                 else:
@@ -209,7 +207,7 @@ def signal_processing(target_frequency, cushion=30, sensitivity=0.5, chunk_size=
                     elif initial_sequence and len(wanted_bits) == 32:
                         # Looks for the number which says how many bytes the message has.
                         try:
-                            num_bytes = bytes(get_decoding(wanted_bits, 1), 'IBM852', 'replace')
+                            num_bytes = bytes(get_decoding(wanted_bits, 1, enc=enc), enc, 'replace')
                             num_bytes = num_bytes[0] * 256 + num_bytes[1]
                             wanted_bits = ""
                             iteration += 1
@@ -233,7 +231,7 @@ def signal_processing(target_frequency, cushion=30, sensitivity=0.5, chunk_size=
                         if not initial_sequence:
                             if len(wanted_bits) > 23:
                                 try:
-                                    if bytes(get_decoding(wanted_bits[-24:], 1), 'IBM852') == bytes("Đ", 'IBM852'):
+                                    if bytes(get_decoding(wanted_bits[-24:], 1, enc=enc), enc) == bytes("Đ", enc):
                                         initial_sequence = True
                                         wanted_bits = ""
                                     else:
@@ -243,7 +241,7 @@ def signal_processing(target_frequency, cushion=30, sensitivity=0.5, chunk_size=
 
                         elif initial_sequence and len(wanted_bits) == 32:
                             print(wanted_bits)
-                            num_bytes = bytes(get_decoding(wanted_bits, 1), 'IBM852', 'replace')
+                            num_bytes = bytes(get_decoding(wanted_bits, 1, enc=enc), enc, 'replace')
                             num_bytes = num_bytes[0] * 256 + num_bytes[1]
                             wanted_bits = ""
                             iteration += 1
@@ -270,9 +268,9 @@ def signal_processing(target_frequency, cushion=30, sensitivity=0.5, chunk_size=
                     print("we are done!")
                     for i in range(0,len(wanted_bits) // (255*8)+1):
                         try:
-                            message += get_decoding(wanted_bits[255*8*i:255*8*(i + 1)], cushion)
+                            message += get_decoding(wanted_bits[255*8*i:255*8*(i + 1)], cushion, enc=enc)
                         except:
-                            message += bytearray([(int(wanted_bits[255*8*i:255*8*(i + 1)][:-1 * cushion * 16][k:k + 8], 2)) for k in range(0, len(wanted_bits[255*8*i:255*8*(i + 1)][:-1 * cushion * 16]), 8)]).decode("IBM852")
+                            message += bytearray([(int(wanted_bits[255*8*i:255*8*(i + 1)][:-1 * cushion * 16][k:k + 8], 2)) for k in range(0, len(wanted_bits[255*8*i:255*8*(i + 1)][:-1 * cushion * 16]), 8)]).decode(enc)
                     print("RECEIVED MESSAGE: " + message)
 
                     # Reverts back to the stage where increased frequency amplitude is being searched for.
@@ -292,4 +290,4 @@ def signal_processing(target_frequency, cushion=30, sensitivity=0.5, chunk_size=
 
 thread_listening = myThread()
 thread_listening.start()
-signal_processing(20700, cushion=30, sensitivity=0.5, chunk_size=49, d_sample=44100, buffer_length=44100)
+signal_processing(20700, cushion=30, sensitivity=0.5, chunk_size=49, d_sample=44100, buffer_length=44100, enc='IBM852')
