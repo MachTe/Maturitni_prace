@@ -83,7 +83,7 @@ def get_decoding(data, error_correction_bytes, enc='IBM852'):
 
 def shift_correction(sequence, carrier_frequency, d_sample):
     '''Finds where does the impulse peak within the given sequence of data. The corresponding shift is returned.
-    Later on, this information is used to examine the chunks that precisely overlay the impulses, thus making the
+    Later on, this information is used to examine the sequences that precisely overlay the impulses, thus making the
     difference of amplitudes between a one and a zero as big as possible.'''
     maxi = 0
     shft = 0
@@ -151,9 +151,9 @@ def signal_processing(carrier_frequency, cushion=30, sensitivity=0.45, impulse_l
                     iteration += 1
 
                 elif iteration == 10:
-                    # Computes rolling average of the amplitude of the last 3 chunks to see if it is high enough.
+                    # Computes rolling average of the amplitude of the last 3 sequences to see if it is high enough.
                     # shiftpoint: used to skip n samples so that the shift correction is measured on a loud signal
-                    average_buffer[i % 3] = find_frequency(Buffer[i * chunk_size:chunk_size * (1 + i)], carrier_frequency, d_sample) / 3
+                    average_buffer[i % 3] = find_frequency(Buffer[i * impulse_length:impulse_length * (1 + i)], carrier_frequency, d_sample) / 3
                     if sum(average_buffer) > 10 * silent_average:
                         iteration += 1
                         shiftpoint = int(294 / impulse_length)
@@ -222,7 +222,7 @@ def signal_processing(carrier_frequency, cushion=30, sensitivity=0.45, impulse_l
                             initial_sequence = False
 
                     if not i and not (iteration == 10):
-                        # Special case for the first chunk of a Buffer.
+                        # Special case for the first sequence of a Buffer.
                         bit = find_frequency(Buffer[shift:impulse_length + shift], carrier_frequency, d_sample)
                         if bit - true_bite_average > -sensitivity * true_bite_average:
                             wanted_bits += "1"
@@ -290,4 +290,4 @@ def signal_processing(carrier_frequency, cushion=30, sensitivity=0.45, impulse_l
 
 thread_listening = myThread()
 thread_listening.start()
-signal_processing(20700, cushion=30, sensitivity=0.45, chunk_size=49, d_sample=44100, buffer_length=44100, enc='IBM852')
+signal_processing(20700, cushion=30, sensitivity=0.45, impulse_length=49, d_sample=44100, buffer_length=44100, enc='IBM852')
