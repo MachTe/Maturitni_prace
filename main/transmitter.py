@@ -68,7 +68,7 @@ def get_encoding(data, error_correction_symbols, enc='IBM852'):
     return data_as_bits
 
 
-def Transmit(frequency, chunk_size, convolution_magnitude=4, delta=0.07, amplitude=0.75, sample_rate=44100, cushion=30, enc='IBM852'):
+def Transmit(frequency, impulse_length, convolution_magnitude=4, delta=0.07, amplitude=0.75, sample_rate=44100, cushion=30, enc='IBM852'):
     '''THE MAIN FUNCTION used to transmit messages via sound
 
     # frequency: integer: between 1 and sample_rate/2, frequency on which the data is transmitted
