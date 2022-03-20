@@ -28,7 +28,7 @@ def save_wav(file_name, audio_data, sample_rate=44100):
     return
 
 
-def get_frequency_impulse(frequency, impulse_length, sample_rate=44100, convolution_magnitude=4, delta=0.07):
+def get_frequency_impulse(frequency, impulse_length, sample_rate=44100, convolution_magnitude=4, delta=0.07, amplitude=0.75):
     # Creates an impulse of a given frequency. The edges are smoothed by convolution.
 
     # frequency: positive integer, interval (20; 20000) can be heard by a human.
