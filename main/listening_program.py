@@ -36,28 +36,28 @@ def listen(def_samplerate, buf_length):
         sd.sleep(60000)
 
 
-def find_frequency(indata, target_frequency, d_sample):
+def find_frequency(indata, carrier_frequency, d_sample):
     '''Returns the amplitude of a given frequency in the given data.
 
     # indata: List of numbers
-    # target_frequency: frequency to be looked for
+    # carrier_frequency: frequency to be looked for
     # Sigma: of all the sines and cosines'''
 
     Sigma = 0
-    freq = len(indata) / d_sample * target_frequency
+    freq = len(indata) / d_sample * carrier_frequency
     for sample in range(len(indata)):
         Sigma += indata[sample][0] * math.e ** (-2 * freq * math.pi * sample / len(indata) * 1j)
 
     return abs(Sigma)
 
 
-def get_encoding(data, backup_bytes, enc='IBM852'):
+def get_encoding(data, error_correction_symbols, enc='IBM852'):
     '''Uses Reed-Solomon error-correction code to transform a String into ones and zeros which are to be send.
     # data: String of IBM852 characters
-    # backup_bytes: Number of bytes protected against flipping
-    # bytes_as_bits: String of ones and zeros'''
+    # error_correction_symbols: Number of bytes protected against flipping
+    # data_as_bits: String of ones and zeros'''
 
-    rsc = RSCodec(2 * backup_bytes)
+    rsc = RSCodec(2 * error_correction_symbols)
 
     if type(data) == type(2):
         st = (16 - len(str(bin(data))[2:])) * "0" + str(bin(data))[2:]
@@ -67,30 +67,30 @@ def get_encoding(data, backup_bytes, enc='IBM852'):
         a = rsc.encode(bytes(data, enc, 'replace'))
         # unknown characters are replaced with a '?'
 
-    bytes_as_bits = ''.join(format(byte, '08b') for byte in a)
-    return bytes_as_bits
+    data_as_bits = ''.join(format(byte, '08b') for byte in a)
+    return data_as_bits
 
 
-def get_decoding(data, backup_bytes, enc='IBM852'):
+def get_decoding(data, error_correction_bytes, enc='IBM852'):
     '''Decodes the String of ones and zeros produced by the get_encoding() back into the initial message.'''
 
-    rsc = RSCodec(2 * backup_bytes)
+    rsc = RSCodec(2 * error_correction_bytes)
     message = rsc.decode(bytearray([(int(data[i:i + 8], 2)) for i in range(0, len(data), 8)]))[0].decode(encoding=enc)
     # Cuts data into segments of 8 bits and translates them back into characters
 
     return message
 
 
-def shift_correction(chunk, target_frequency, d_sample):
-    '''Finds where does the impulse peak within the given chunk of data. The corresponding shift is returned.
+def shift_correction(sequence, carrier_frequency, d_sample):
+    '''Finds where does the impulse peak within the given sequence of data. The corresponding shift is returned.
     Later on, this information is used to examine the chunks that precisely overlay the impulses, thus making the
     difference of amplitudes between a one and a zero as big as possible.'''
     maxi = 0
     shft = 0
-    chunk_size = len(chunk)
-    chunk = 2*chunk
-    for k in range(chunk_size):
-        amp = find_frequency(chunk[k:int(chunk_size/2 + k)], target_frequency, d_sample)
+    sequence_size = len(sequence)
+    sequence = 2*sequence
+    for k in range(sequence_size):
+        amp = find_frequency(sequence[k:int(sequence_size/2 + k)], carrier_frequency, d_sample)
         if amp > maxi:
             maxi = amp
             shft = k
@@ -106,14 +106,14 @@ def skip(num):
         return 0
 
 
-def signal_processing(target_frequency, cushion=30, sensitivity=0.5, chunk_size=49, d_sample=44100, buffer_length=44100, enc='IMB852'):
+def signal_processing(carrier_frequency, cushion=30, sensitivity=0.45, impulse_length=49, d_sample=44100, buffer_length=44100, enc='IMB852'):
     '''THE MAIN THREAD, where the signal gets processed.
 
-    # target_frequency, integer between 1 and d_sample/2, frequency on which the data is transmitted.
+    # carrier_frequency, integer between 1 and d_sample/2, frequency on which the data is transmitted.
     # cushion: integer, the number of bytes protected against flipping within each (255 - 2*cushion) bytes.
     # sensitivity: float between 1 and 0, if too small, some ones might be seen as zeros and vice versa, if too big
                    some zeros might be seen as ones. Right balance has to be struck.
-    # chunk_size: integer, the length of one impulse.
+    # impulse_length: integer, the length of one impulse.
     # d_sample: integer, default sample rate at which the audio is sampled.
     # buffer_length: integer, length of the audio buffer. Has to be divisible by chunk_size!
 
@@ -142,21 +142,21 @@ def signal_processing(target_frequency, cushion=30, sensitivity=0.5, chunk_size=
         if len(Buffer) == 0:
             tm.sleep(0.02)
         else:
-            for i in range(skip(iteration)*int(18001/chunk_size), int(d_sample/chunk_size)):
+            for i in range(skip(iteration)*int(18001/impulse_length), int(d_sample/impulse_length)):
                 # Goes through the Buffer (First iteration skips some 18 thousand samples - they are usually corrupted)
 
                 if iteration < 10:
                     # Finds average amplitude of the target frequency in ambient noise.
-                    silent_average += find_frequency(Buffer[i * chunk_size:chunk_size * (1 + i)], target_frequency, d_sample) / 10
+                    silent_average += find_frequency(Buffer[i * impulse_length:impulse_length * (1 + i)], carrier_frequency, d_sample) / 10
                     iteration += 1
 
                 elif iteration == 10:
                     # Computes rolling average of the amplitude of the last 3 chunks to see if it is high enough.
                     # shiftpoint: used to skip n samples so that the shift correction is measured on a loud signal
-                    average_buffer[i % 3] = find_frequency(Buffer[i * chunk_size:chunk_size * (1 + i)], target_frequency, d_sample) / 3
+                    average_buffer[i % 3] = find_frequency(Buffer[i * chunk_size:chunk_size * (1 + i)], carrier_frequency, d_sample) / 3
                     if sum(average_buffer) > 10 * silent_average:
                         iteration += 1
-                        shiftpoint = int(294 / chunk_size)
+                        shiftpoint = int(294 / impulse_length)
                         print("\nloud frequency intercepted!!!")
 
                 elif iteration < 11 + shiftpoint:
@@ -165,7 +165,7 @@ def signal_processing(target_frequency, cushion=30, sensitivity=0.5, chunk_size=
 
                 elif iteration == 11 + shiftpoint:
                     # Shifts by certain number of samples to measure the frequency in the middle of the impulses.
-                    shift = shift_correction(Buffer[i * chunk_size:chunk_size * (1 + i)], target_frequency, d_sample)
+                    shift = shift_correction(Buffer[i * impulse_length:impulse_length * (1 + i)], carrier_frequency, d_sample)
                     iteration += 1
 
                 elif 11 + shiftpoint < iteration < 32 + shiftpoint:
@@ -173,21 +173,21 @@ def signal_processing(target_frequency, cushion=30, sensitivity=0.5, chunk_size=
                     # Accounts for the shift at the end of each Buffer
                     if not i:
                         iteration += 1
-                        true_bite_average += find_frequency(old_buffer + Buffer[:shift], target_frequency, d_sample) / 20
-                    elif i == int(d_sample/chunk_size) - 1:
-                        old_buffer = Buffer[i * chunk_size + shift:]
+                        true_bite_average += find_frequency(old_buffer + Buffer[:shift], carrier_frequency, d_sample) / 20
+                    elif i == int(d_sample/impulse_length) - 1:
+                        old_buffer = Buffer[i * impulse_length + shift:]
                     else:
                         iteration += 1
-                        true_bite_average += find_frequency(Buffer[i * chunk_size + shift:chunk_size * (1 + i) + shift], target_frequency, d_sample) / 20
+                        true_bite_average += find_frequency(Buffer[i * impulse_length + shift:impulse_length * (1 + i) + shift], carrier_frequency, d_sample) / 20
 
                 elif iteration == 32 + shiftpoint:
                     # Decides whether the signal represents a 1 ore a 0
                     if not i:
-                        bit = find_frequency(old_buffer + Buffer[:shift], target_frequency, d_sample)
-                    elif i == int(d_sample / chunk_size) - 1:
-                        old_buffer = Buffer[i * chunk_size + shift:]
+                        bit = find_frequency(old_buffer + Buffer[:shift], carrier_frequency, d_sample)
+                    elif i == int(d_sample / impulse_length) - 1:
+                        old_buffer = Buffer[i * impulse_length + shift:]
                     else:
-                        bit = find_frequency(Buffer[i * chunk_size + shift:chunk_size * (1 + i) + shift], target_frequency, d_sample)
+                        bit = find_frequency(Buffer[i * impulse_length + shift:impulse_length * (1 + i) + shift], carrier_frequency, d_sample)
                     if bit - true_bite_average > -sensitivity * true_bite_average:
                         wanted_bits += "1"
                     else:
@@ -223,7 +223,7 @@ def signal_processing(target_frequency, cushion=30, sensitivity=0.5, chunk_size=
 
                     if not i and not (iteration == 10):
                         # Special case for the first chunk of a Buffer.
-                        bit = find_frequency(Buffer[shift:chunk_size + shift], target_frequency, d_sample)
+                        bit = find_frequency(Buffer[shift:impulse_length + shift], carrier_frequency, d_sample)
                         if bit - true_bite_average > -sensitivity * true_bite_average:
                             wanted_bits += "1"
                         else:
@@ -249,12 +249,12 @@ def signal_processing(target_frequency, cushion=30, sensitivity=0.5, chunk_size=
                 elif 32 + shiftpoint < iteration < 33 + shiftpoint + 8 * num_bytes:
                     # Looks for the know number of bytes
                     if not i:
-                        bit = find_frequency(old_buffer + Buffer[:shift], target_frequency, d_sample)
-                    elif i == int(d_sample / chunk_size) - 1:
-                        old_buffer = Buffer[i * chunk_size + shift:]
+                        bit = find_frequency(old_buffer + Buffer[:shift], carrier_frequency, d_sample)
+                    elif i == int(d_sample / impulse_length) - 1:
+                        old_buffer = Buffer[i * impulse_length + shift:]
                     else:
-                        bit = find_frequency(Buffer[i * chunk_size + shift:chunk_size * (1 + i) + shift],
-                                             target_frequency, d_sample)
+                        bit = find_frequency(Buffer[i * impulse_length + shift:impulse_length * (1 + i) + shift],
+                                             carrier_frequency, d_sample)
                     if bit - true_bite_average > -sensitivity * true_bite_average:
                         wanted_bits += "1"
                     else:
@@ -290,4 +290,4 @@ def signal_processing(target_frequency, cushion=30, sensitivity=0.5, chunk_size=
 
 thread_listening = myThread()
 thread_listening.start()
-signal_processing(20700, cushion=30, sensitivity=0.5, chunk_size=49, d_sample=44100, buffer_length=44100, enc='IBM852')
+signal_processing(20700, cushion=30, sensitivity=0.45, chunk_size=49, d_sample=44100, buffer_length=44100, enc='IBM852')
