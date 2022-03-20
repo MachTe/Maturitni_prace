@@ -33,7 +33,7 @@ def listen(def_samplerate, buf_length):
     Buffer = []
     stream = sd.InputStream(callback=audio_callback, samplerate=def_samplerate, blocksize=buf_length, channels=1)
     with stream:
-        sd.sleep(60000)
+        sd.sleep(600000)
 
 
 def find_frequency(indata, carrier_frequency, d_sample):
@@ -203,6 +203,12 @@ def signal_processing(carrier_frequency, cushion=30, sensitivity=0.45, impulse_l
                                     pass
                             except:
                                 pass
+                            if len(wanted_bits) > 180:
+                                print("false alarm...")
+                                wanted_bits = ""
+                                iteration = 10
+                                true_bite_average = 0
+                                average_buffer = [0, 0, 0]
 
                     elif initial_sequence and len(wanted_bits) == 32:
                         # Looks for the number which says how many bytes the message has.
