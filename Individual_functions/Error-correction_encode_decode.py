@@ -1,7 +1,7 @@
 from reedsolo import RSCodec
 
 
-def get_encoding(data, backup_bytes, enc='IBM852'):
+def get_encoding(data, error_correction_symbols, enc='IBM852'):
     '''Uses Reed-Solomon error-correction code to transform a String into ones and zeros which are to be send.
 
     # data: String of IBM852 characters
